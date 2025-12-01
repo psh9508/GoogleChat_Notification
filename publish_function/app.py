@@ -7,7 +7,6 @@ import boto3
 sqs = boto3.client("sqs")
 QUEUE_URL = os.environ["QUEUE_URL"]
 
-
 def lambda_handler(event, context):
     try:
         body_str = _extract_body(event)
@@ -19,20 +18,19 @@ def lambda_handler(event, context):
         except json.JSONDecodeError:
             return _response(400, {"message": "body must be valid JSON"})
 
-        key = body.get("key")
+        webhookKey = body.get("webhookKey")
         payload = body.get("payload")
-        if not key or payload is None:
-            return _response(400, {"message": "fields 'key' and 'payload' are required"})
+        if not webhookKey or payload is None:
+            return _response(400, {"message": "fields 'webhookKey' and 'payload' are required"})
 
-        message_body = _coerce_json_payload(payload)
-        if message_body is None:
+        if not _is_json_payload(payload):
             return _response(
                 400, {"message": "field 'payload' must be a JSON object/array or JSON string"}
             )
 
         response = sqs.send_message(
             QueueUrl=QUEUE_URL,
-            MessageBody=message_body,
+            MessageBody=body_str,
         )
 
         return _response(200, {"message": "queued", "id": response["MessageId"]})
@@ -53,16 +51,16 @@ def _extract_body(event):
     return body
 
 
-def _coerce_json_payload(value):
+def _is_json_payload(value) -> bool:
     if isinstance(value, (dict, list)):
-        return json.dumps(value)
+        return True
     if isinstance(value, str):
         try:
             json.loads(value)
-            return value
+            return True
         except json.JSONDecodeError:
-            return None
-    return None
+            return False
+    return False
 
 
 def _response(status_code, payload):
