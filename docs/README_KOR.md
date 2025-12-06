@@ -10,7 +10,7 @@
 2. `Lambda`에서 들어온 메시지가 우리가 처리할 수 있는 메시지인지 확인 하고 확인 된 데이터를 `SQS`에 전달합니다.
 3. `SQS`에 메시지가 들어오면 Notification `Lambda`가 trigger 됩니다.
 4. Google Chat Webhook의 특성상 인증키가 같이 표함 된 URL을 사용하기 때문에 URL만 알면 Google Chat으로 메시지를 보낼 수 있습니다. 그래서 보안을 위해 직접적으로 URL을 파라미터로 넘기지 않고 URL을 Resolve 할 수 있는 Key를 파라미터로 받아 `Secrets Manager`에서 실제 Webhook URL을 Resolve 합니다.
-5. '최소 1번 전송' 이라는 `SQS`의 특성으로 인해 여러번 알림이 발송 될 수 있어서 `DynamoDB`를 이용해서 반드시 1번만 알림을 전송할 수 있도록 합니다.
+5. '최소 1번 전송' 이라는 `SQS`의 특성으로 인해 여러번 알림이 발송 될 수 있어서 `DynamoDB`를 이용해서 멱등성을 보장합니다.
 
 ## Getting started
 
@@ -39,6 +39,38 @@ sam deploy
 
 ## Sending a message
 
-메시지를 보내기 위해서는 다음의 값이 키로 있는 `json` 데이터를 보내야 합니다.
+메시지를 보내기 위해서는 다음의 값이 키로 있는 `json` 데이터를 보내야 합니다. `webhookKey`와 `payload`키가 없는 `json`이 들어오면 Pulish `Lambda`에서 에러를 리턴합니다.
 - webhookKey : Googlechat Webhook url을 `Secrets Manager`로 부터 가져올 수 있는 값 
 - payload : Googlechat에서 사용하는 [CardV2](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards?hl=ko) 형식의 `json`
+
+예시
+``` json
+{
+   "webhookKey":"my_service",
+   "payload":{
+      "cardsV2":[
+         {
+            "cardId":"unique-card-id",
+            "card":{
+               "header":{
+                  "title":"Hello!",
+                  "subtitle":"Notification System"
+               },
+               "sections":[
+                  {
+                     "header":"Header",
+                     "widgets":[
+                        {
+                           "textParagraph":{
+                              "text":"Hello! <b>Google Chat</b> This is a message by card object."
+                           }
+                        }
+                     ]
+                  }
+               ]
+            }
+         }
+      ]
+   }
+}
+```
