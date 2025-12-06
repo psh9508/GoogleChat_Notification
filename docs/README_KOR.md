@@ -39,3 +39,6 @@ sam deploy
 
 ## Sending a message
 
+메시지를 보내기 위해서는 다음의 값이 키로 있는 `json` 데이터를 보내야 합니다.
+- webhookKey : Googlechat Webhook url을 `Secrets Manager`로 부터 가져올 수 있는 값 
+- payload : Googlechat에서 사용하는 [CardV2](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards?hl=ko) 형식의 `json`
