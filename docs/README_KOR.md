@@ -83,3 +83,6 @@ sam deploy
    }
 }
 ```
+
+
+## How to make 멱등성 using DynamoDB
