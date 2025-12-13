@@ -46,9 +46,17 @@ sam deploy
 
 > 호출 URL : {위에서 확인한 URL 호출}/googlechat/notify
 
-## Message structure
+### Secrets Manager 설정
 
-메시지를 보내기 위해서는 다음의 값이 키로 있는 `json` 데이터를 보내야 합니다. `webhookKey`와 `payload`키가 없는 `json`이 들어오면 Pulish `Lambda`에서 에러를 리턴합니다.
+이 API는 메시지를 보내기 위해서는 `webhookKey`와 `payload` 키로 이루어진 `json` 데이터를 보내야 합니다.  `webhookKey`와 `payload`키가 없는 `json`이 들어오면 Pulish `Lambda`에서 에러를 리턴합니다. 그래서 `webhookKey`를 가지고 실제 Googlechat webhook url을 해결하기 위해서 `Secrets Manager`에 Key와 URL 데이터를 입력해야합니다.
+
+예시
+![alt text](secrets_manager.png)
+
+
+### Message structure
+
+
 - webhookKey : Googlechat Webhook url을 `Secrets Manager`로 부터 가져올 수 있는 값 
 - payload : Googlechat에서 사용하는 [CardV2](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards?hl=ko) 형식의 `json`
 
@@ -83,7 +91,6 @@ sam deploy
    }
 }
 ```
-
 
 ## How to make 멱등성 using DynamoDB
 
