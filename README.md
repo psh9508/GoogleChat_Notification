@@ -1,9 +1,12 @@
 # googlechat-notification ([SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html))
 
+## Langusage
+
+[한국어](./docs/README_KOR.md)
 
 ## Structure
 
-![Stucture](structure_image.png)
+![Stucture](./docs/structure_image.png)
 
 This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
 
