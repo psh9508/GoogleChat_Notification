@@ -1,138 +1,108 @@
 # googlechat-notification ([SAM](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html))
 
-## Langusage
-
-[한국어](./docs/README_KOR.md)
 
 ## Structure
 
 ![Stucture](./docs/structure_image.png)
 
-This project contains source code and supporting files for a serverless application that you can deploy with the SAM CLI. It includes the following files and folders.
+1. `API Gateway`
+    외부 요청을 수신 후 `SQS`로 전달하기 위해 `Lambda`를 호출합니다.
+2. `Lambda`에서 들어온 메시지가 우리가 처리할 수 있는 메시지인지 확인 하고 확인 된 데이터를 `SQS`에 전달합니다.
+3. `SQS`에 메시지가 들어오면 Notification `Lambda`가 trigger 됩니다.
+4. Google Chat Webhook의 특성상 인증키가 같이 표함 된 URL을 사용하기 때문에 URL만 알면 Google Chat으로 메시지를 보낼 수 있습니다. 그래서 보안을 위해 직접적으로 URL을 파라미터로 넘기지 않고 URL을 Resolve 할 수 있는 Key를 파라미터로 받아 `Secrets Manager`에서 실제 Webhook URL을 Resolve 합니다.
+5. '최소 1번 전송' 이라는 `SQS`의 특성으로 인해 여러번 알림이 발송 될 수 있어서 `DynamoDB`를 이용해서 멱등성을 보장합니다.
 
-- hello_world - Code for the application's Lambda function.
-- events - Invocation events that you can use to invoke the function.
-- tests - Unit tests for the application code. 
-- template.yaml - A template that defines the application's AWS resources.
+## Getting started
 
-The application uses several AWS resources, including Lambda functions and an API Gateway API. These resources are defined in the `template.yaml` file in this project. You can update the template to add AWS resources through the same deployment process that updates your application code.
+`samconfig_back.toml`파일의 이름을 `samconfig.toml`로 변경하고 파일 안에 있는 값 중 아래의 값을 현재 상황에 맞게 변경합니다.
 
-If you prefer to use an integrated development environment (IDE) to build and test your application, you can use the AWS Toolkit.  
-The AWS Toolkit is an open source plug-in for popular IDEs that uses the SAM CLI to build and deploy serverless applications on AWS. The AWS Toolkit also adds a simplified step-through debugging experience for Lambda function code. See the following links to get started.
+``` yaml
+[default.global.parameters]
+stack_name = "ntlab-googlechat-notification"
+region = {Change_to_your_region}
 
-* [CLion](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [GoLand](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [IntelliJ](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [WebStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [Rider](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PhpStorm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [PyCharm](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [RubyMine](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [DataGrip](https://docs.aws.amazon.com/toolkit-for-jetbrains/latest/userguide/welcome.html)
-* [VS Code](https://docs.aws.amazon.com/toolkit-for-vscode/latest/userguide/welcome.html)
-* [Visual Studio](https://docs.aws.amazon.com/toolkit-for-visual-studio/latest/user-guide/welcome.html)
-
-## Deploy the sample application
-
-The Serverless Application Model Command Line Interface (SAM CLI) is an extension of the AWS CLI that adds functionality for building and testing Lambda applications. It uses Docker to run your functions in an Amazon Linux environment that matches Lambda. It can also emulate your application's build environment and API.
-
-To use the SAM CLI, you need the following tools.
-
-* SAM CLI - [Install the SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-install.html)
-* [Python 3 installed](https://www.python.org/downloads/)
-* Docker - [Install Docker community edition](https://hub.docker.com/search/?type=edition&offering=community)
-
-To build and deploy your application for the first time, run the following in your shell:
-
-```bash
-sam build --use-container
-sam deploy --guided
+[default.deploy.parameters]
+profile = {Change_to_your_profile_name_in_.aws/config_file}
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
 ```
 
-The first command will build the source of your application. The second command will package and deploy your application to AWS, with a series of prompts:
+그 후 `SAM` 명령어를 아래와 같은 순서로 입력합니다.
 
-* **Stack Name**: The name of the stack to deploy to CloudFormation. This should be unique to your account and region, and a good starting point would be something matching your project name.
-* **AWS Region**: The AWS region you want to deploy your app to.
-* **Confirm changes before deploy**: If set to yes, any change sets will be shown to you before execution for manual review. If set to no, the AWS SAM CLI will automatically deploy application changes.
-* **Allow SAM CLI IAM role creation**: Many AWS SAM templates, including this example, create AWS IAM roles required for the AWS Lambda function(s) included to access AWS services. By default, these are scoped down to minimum required permissions. To deploy an AWS CloudFormation stack which creates or modifies IAM roles, the `CAPABILITY_IAM` value for `capabilities` must be provided. If permission isn't provided through this prompt, to deploy this example you must explicitly pass `--capabilities CAPABILITY_IAM` to the `sam deploy` command.
-* **Save arguments to samconfig.toml**: If set to yes, your choices will be saved to a configuration file inside the project, so that in the future you can just re-run `sam deploy` without parameters to deploy changes to your application.
-
-You can find your API Gateway Endpoint URL in the output values displayed after deployment.
-
-## Use the SAM CLI to build and test locally
-
-Build your application with the `sam build --use-container` command.
-
-```bash
-sam-googlechat-notification$ sam build --use-container
+```
+sam build
+sam deploy
 ```
 
-The SAM CLI installs dependencies defined in `hello_world/requirements.txt`, creates a deployment package, and saves it in the `.aws-sam/build` folder.
+`sam build` 명령어는 코드를 빌드해 `.aws-sam` 폴더를 만들고 `sam deploy` 명령어는 그 폴더를 이용해서 실제 `AWS` 리소스를 만드는 코드입니다.
 
-Test a single function by invoking it directly with a test event. An event is a JSON document that represents the input that the function receives from the event source. Test events are included in the `events` folder in this project.
 
-Run functions locally and invoke them with the `sam local invoke` command.
+## Sending a message
 
-```bash
-sam-googlechat-notification$ sam local invoke HelloWorldFunction --event events/event.json
+### Endpoint 확인
+메시지를 보내기 위한 Endpoint를 확인해야 합니다. `sam deploy`를 해서 실제 `AWS`에 리소스가 배포 되었다면 실제 `AWS`의 `API Gateway`를 보고 Endpoint를 확인해야 합니다.
+
+![alt text](./docs/APIGateway.png)
+
+> 호출 URL : {위에서 확인한 URL 호출}/googlechat/notify
+
+### Secrets Manager 설정
+
+이 API는 메시지를 보내기 위해서는 `webhookKey`와 `payload` 키로 이루어진 `json` 데이터를 보내야 합니다.  `webhookKey`와 `payload`키가 없는 `json`이 들어오면 Pulish `Lambda`에서 에러를 리턴합니다. 그래서 `webhookKey`를 가지고 실제 Googlechat webhook url을 해결하기 위해서 `Secrets Manager`에 Key와 URL 데이터를 입력해야합니다.
+
+예시
+![alt text](./docs/secrets_manager.png)
+
+
+### Message structure
+
+
+- webhookKey : Googlechat Webhook url을 `Secrets Manager`로 부터 가져올 수 있는 값 
+- payload : Googlechat에서 사용하는 [CardV2](https://developers.google.com/workspace/chat/api/reference/rest/v1/cards?hl=ko) 형식의 `json`
+
+예시
+``` json
+{
+   "webhookKey":"my_service",
+   "payload":{
+      "cardsV2":[
+         {
+            "cardId":"unique-card-id",
+            "card":{
+               "header":{
+                  "title":"Hello!",
+                  "subtitle":"Notification System"
+               },
+               "sections":[
+                  {
+                     "header":"Header",
+                     "widgets":[
+                        {
+                           "textParagraph":{
+                              "text":"Hello!"
+                           }
+                        }
+                     ]
+                  }
+               ]
+            }
+         }
+      ]
+   }
+}
 ```
 
-The SAM CLI can also emulate your application's API. Use the `sam local start-api` to run the API locally on port 3000.
+## How to make 멱등성 using DynamoDB
 
-```bash
-sam-googlechat-notification$ sam local start-api
-sam-googlechat-notification$ curl http://localhost:3000/
-```
+`SQS`는 최소한 1번 전송이라는 방식으로 동작합니다. 그래서 올바로 처리되지 않으면 언제든지 1번 이상의 메시지가 전달 될 수 있습니다. 이것을 막기위해 `DynamoDB`를 사용해서 메시지에 대한 비선점 락을 설정하고 완료시에 완료 상태를 저장할 수 있게 하였습니다.
 
-The SAM CLI reads the application template to determine the API's routes and the functions that they invoke. The `Events` property on each function's definition includes the route and method for each path.
+### DynamoDB를 사용하게 된 이유
 
-```yaml
-      Events:
-        HelloWorld:
-          Type: Api
-          Properties:
-            Path: /hello
-            Method: get
-```
+- 현재 시스템은 매우 적은 양의 알람을 송신할 것이라고 예상하고 있다. 그래서 사용한 만큼 비용을 지불하는 서비스가 비용적인 문제에서 좋을 것이라고 판단했다.
+- 올바로 알람을 발송하면 그 상태가 DB에 저장되는데 이것은 잠시동안 `SQS`의 메시지를 딱 1번만 처리하는 용도로 사용한다. 이런 상황에서는 TTL을 사용해서 데이터를 지울 수 있는 DB가 필요한데 일반적인 RDB에는 이런 기능이 없어서 `DynamoDB`가 좋은 선택일 것이라고 판단했다. 참고로 `DynamoDB`에서 TTL로 데이터를 삭제하는 것은 무료이다.
 
-## Add a resource to your application
-The application template uses AWS Serverless Application Model (AWS SAM) to define application resources. AWS SAM is an extension of AWS CloudFormation with a simpler syntax for configuring common serverless application resources such as functions, triggers, and APIs. For resources not included in [the SAM specification](https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md), you can use standard [AWS CloudFormation](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-template-resource-type-ref.html) resource types.
+### 처리방법
 
-## Fetch, tail, and filter Lambda function logs
-
-To simplify troubleshooting, SAM CLI has a command called `sam logs`. `sam logs` lets you fetch logs generated by your deployed Lambda function from the command line. In addition to printing the logs on the terminal, this command has several nifty features to help you quickly find the bug.
-
-`NOTE`: This command works for all AWS Lambda functions; not just the ones you deploy using SAM.
-
-```bash
-sam-googlechat-notification$ sam logs -n HelloWorldFunction --stack-name "sam-googlechat-notification" --tail
-```
-
-You can find more information and examples about filtering Lambda function logs in the [SAM CLI Documentation](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-cli-logging.html).
-
-## Tests
-
-Tests are defined in the `tests` folder in this project. Use PIP to install the test dependencies and run tests.
-
-```bash
-sam-googlechat-notification$ pip install -r tests/requirements.txt --user
-# unit test
-sam-googlechat-notification$ python -m pytest tests/unit -v
-# integration test, requiring deploying the stack first.
-# Create the env variable AWS_SAM_STACK_NAME with the name of the stack we are testing
-sam-googlechat-notification$ AWS_SAM_STACK_NAME="sam-googlechat-notification" python -m pytest tests/integration -v
-```
-
-## Cleanup
-
-To delete the sample application that you created, use the AWS CLI. Assuming you used your project name for the stack name, you can run the following:
-
-```bash
-sam delete --stack-name "sam-googlechat-notification"
-```
-
-## Resources
-
-See the [AWS SAM developer guide](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/what-is-sam.html) for an introduction to SAM specification, the SAM CLI, and serverless application concepts.
-
-Next, you can use AWS Serverless Application Repository to deploy ready to use Apps that go beyond hello world samples and learn how authors developed their applications: [AWS Serverless Application Repository main page](https://aws.amazon.com/serverless/serverlessrepo/)
+1. 메시지를 전송하기 전에 `attribute_not_exists(message_id)` 조건을 주어 message_id가 처리 되는 동안 같은 message_id가 처리되지 못하도록 막는다. 
+2. 처리가 완료되면 DB에 저장을 하고 처리가 완료되지 않으면 DB의 값을 지워 락을 해제한다.
+3. 처리가 완료 되어 DB에 저장 된 데이터는 저장할 때 TTL을 사용해 데이터가 무한정 쌓이지 않도록 처리한다.
