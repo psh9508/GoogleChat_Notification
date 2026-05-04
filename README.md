@@ -100,6 +100,6 @@ Example
 
 ### Processing Logic
 
-1. Lock Acquisition: Before processing a message, apply the `attribute_not_exists(message_id)` condition to prevent concurrent processing of the same message_id.
+1. Lock Acquisition: Before processing a message, apply the `attribute_not_exists(PK)` condition to prevent concurrent processing of the same message_id.
 2. Completion: Upon successful processing, update the status in the database. If processing fails, delete the item from the database to release the lock.
 3. Automatic Cleanup: Configure TTL (Time to Live) on the stored data to prevent indefinite data accumulation.

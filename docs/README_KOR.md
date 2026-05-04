@@ -103,6 +103,6 @@ sam deploy
 
 ### 처리방법
 
-1. 메시지를 전송하기 전에 `attribute_not_exists(message_id)` 조건을 주어 message_id가 처리 되는 동안 같은 message_id가 처리되지 못하도록 막는다. 
+1. 메시지를 전송하기 전에 `attribute_not_exists(PK)` 조건을 주어 message_id가 처리 되는 동안 같은 message_id가 처리되지 못하도록 막는다. 
 2. 처리가 완료되면 DB에 저장을 하고 처리가 완료되지 않으면 DB의 값을 지워 락을 해제한다.
 3. 처리가 완료 되어 DB에 저장 된 데이터는 저장할 때 TTL을 사용해 데이터가 무한정 쌓이지 않도록 처리한다.
