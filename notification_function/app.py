@@ -94,7 +94,7 @@ def process_record_idempotent(record):
                 'created_at': int(time.time()),
                 'ttl': int(time.time()) + 120
             },
-            ConditionExpression='attribute_not_exists(message_id)'
+            ConditionExpression='attribute_not_exists(PK)'
         )
     except ClientError as e:
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
