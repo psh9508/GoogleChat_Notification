@@ -14,27 +14,41 @@
 
 ## Getting started
 
-`samconfig_back.toml`파일의 이름을 `samconfig.toml`로 변경하고 파일 안에 있는 값 중 아래의 값을 현재 상황에 맞게 변경합니다.
+`samconfig_example.toml`파일의 이름을 `samconfig.toml`로 변경하고 파일 안에 있는 값 중 아래의 값을 현재 상황에 맞게 변경합니다.
+
+> 값 변경시 반드시 "(따옴표)로 값을 감싸야 합니다. (toml 규칙)
 
 ``` yaml
 [default.global.parameters]
 stack_name = "ntlab-googlechat-notification"
-region = {Change_to_your_region}
+region = "{Change_to_your_region}"
 
 [default.deploy.parameters]
-profile = {Change_to_your_profile_name_in_.aws/config_file}
+profile = "{Change_to_your_profile_name_in_.aws/config_file}"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
 ```
 
-그 후 `SAM` 명령어를 아래와 같은 순서로 입력합니다.
+### 사전 준비
+
+이 프로젝트를 빌드하고 배포하기 위해 아래 도구들이 필요합니다.
+
+| 도구 | 설명 | 설치 방법 |
+|------|------|-----------|
+| [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) | AWS 리소스 관리 및 인증 프로필 설정 | [공식 문서](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) |
+| [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html) | SAM 템플릿 빌드 및 배포 | `pipx install aws-sam-cli` |
+| [Docker](https://docs.docker.com/get-docker/) | `--use-container` 옵션으로 빌드 시 필요 | [공식 문서](https://docs.docker.com/get-docker/) |
+
+### 빌드 및 배포
 
 ```
-sam build
+sam build --use-container
 sam deploy
 ```
 
 `sam build` 명령어는 코드를 빌드해 `.aws-sam` 폴더를 만들고 `sam deploy` 명령어는 그 폴더를 이용해서 실제 `AWS` 리소스를 만드는 코드입니다.
+
+> `--use-container` 옵션은 Docker 컨테이너에서 빌드를 수행합니다. 로컬에 Lambda 런타임과 동일한 Python 버전이 설치되어 있지 않아도 빌드할 수 있습니다.
 
 
 ## Sending a message
@@ -42,7 +56,7 @@ sam deploy
 ### Endpoint 확인
 메시지를 보내기 위한 Endpoint를 확인해야 합니다. `sam deploy`를 해서 실제 `AWS`에 리소스가 배포 되었다면 실제 `AWS`의 `API Gateway`를 보고 Endpoint를 확인해야 합니다.
 
-![alt text](APIGateway_KOR.png)
+![alt text](APIGateway.png)
 
 > 호출 URL : {위에서 확인한 URL 호출}/googlechat/notify
 
@@ -51,7 +65,7 @@ sam deploy
 이 API는 메시지를 보내기 위해서는 `webhookKey`와 `payload` 키로 이루어진 `json` 데이터를 보내야 합니다.  `webhookKey`와 `payload`키가 없는 `json`이 들어오면 Pulish `Lambda`에서 에러를 리턴합니다. 그래서 `webhookKey`를 가지고 실제 Googlechat webhook url을 해결하기 위해서 `Secrets Manager`에 Key와 URL 데이터를 입력해야합니다.
 
 예시
-![alt text](secrets_manager_KOR.png)
+![alt text](secrets_manager.png)
 
 
 ### Message structure
@@ -63,7 +77,7 @@ sam deploy
 예시
 ``` json
 {
-   "webhookKey":"my_service",
+   "webhookKey":"TEST_WEB_HOOK_KEY",
    "payload":{
       "cardsV2":[
          {
@@ -92,7 +106,7 @@ sam deploy
 }
 ```
 
-## How to make 멱등성 using DynamoDB
+## How to implement idempotency with DynamoDB?
 
 `SQS`는 최소한 1번 전송이라는 방식으로 동작합니다. 그래서 올바로 처리되지 않으면 언제든지 1번 이상의 메시지가 전달 될 수 있습니다. 이것을 막기위해 `DynamoDB`를 사용해서 메시지에 대한 비선점 락을 설정하고 완료시에 완료 상태를 저장할 수 있게 하였습니다.
 
