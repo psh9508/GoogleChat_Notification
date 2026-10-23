@@ -111,7 +111,7 @@ Example
 
 ## How to implement idempotency with DynamoDB?
 
-`SQS` operates on an "at-least-once delivery" model. This means that if a message is not properly processed, it can be delivered more than once at any time. To prevent this, we use `DynamoDB` to set a non-preemptive lock on messages and store the completion status upon successful processing.
+`SQS` operates on an "at-least-once delivery" model. This means that if a message is not properly processed, it can be delivered more than once at any time. To prevent this, we use `DynamoDB` to store the completion status of each message and skip messages that have already been processed.
 
 ### Why DynamoDB?
 
@@ -120,6 +120,7 @@ Example
 
 ### Processing Logic
 
-1. Before sending a message, apply the `attribute_not_exists(PK)` condition to prevent the same message_id from being processed concurrently while another is already being processed.
-2. Upon successful processing, save the result to the database. If processing fails, delete the database entry to release the lock.
-3. Data saved to the database upon completion uses TTL to prevent indefinite data accumulation.
+1. Before sending a message, look up the message_id (`PK`) in the database. If a record already exists, the message has already been processed, so it is skipped.
+2. The record is saved to the database only after the message has been sent successfully. If processing fails, nothing is saved and the exception is raised so that `SQS` retries the message. (A crash before saving results in a retry instead of a lost message.)
+3. Data saved to the database upon completion uses TTL (24 hours) to prevent indefinite data accumulation.
+4. The `SQS` visibility timeout is set to 120 seconds, 6x the function timeout (AWS recommendation), so that a message is not redelivered while it is still being processed.

@@ -17,7 +17,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: NotificationQueue
-      VisibilityTimeout: 60
+      VisibilityTimeout: 120 # 6x function timeout (AWS recommendation for Lambda SQS triggers)
       RedrivePolicy: 
         deadLetterTargetArn: !GetAtt NotificationDLQ.Arn
         maxReceiveCount: 3

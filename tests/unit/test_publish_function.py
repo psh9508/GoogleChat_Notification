@@ -23,15 +23,13 @@ def patch_sqs(monkeypatch):
 
 
 def test_valid_json_payload(patch_sqs):
-    event = {
-        "body": json.dumps({"key": "team", "payload": {"text": "hello"}}),
-        "isBase64Encoded": False,
-    }
+    body = json.dumps({"webhookKey": "team", "payload": {"text": "hello"}})
+    event = {"body": body, "isBase64Encoded": False}
 
     resp = handler.lambda_handler(event, None)
 
     assert resp["statusCode"] == 200
-    assert patch_sqs.calls[0]["MessageBody"] == json.dumps({"text": "hello"})
+    assert patch_sqs.calls[0]["MessageBody"] == body
 
 
 def test_invalid_json_body():
@@ -41,22 +39,22 @@ def test_invalid_json_body():
 
 
 def test_missing_fields():
-    event = {"body": json.dumps({"key": "team"})}
+    event = {"body": json.dumps({"webhookKey": "team"})}
     resp = handler.lambda_handler(event, None)
     assert resp["statusCode"] == 400
 
 
 def test_payload_must_be_json_string_or_object():
-    event = {"body": json.dumps({"key": "team", "payload": "not-json-string"})}
+    event = {"body": json.dumps({"webhookKey": "team", "payload": "not-json-string"})}
     resp = handler.lambda_handler(event, None)
     assert resp["statusCode"] == 400
 
 
 def test_base64_body_decoding(patch_sqs):
-    raw = json.dumps({"key": "team", "payload": {"text": "ok"}}).encode("utf-8")
-    event = {"body": base64.b64encode(raw).decode("utf-8"), "isBase64Encoded": True}
+    body = json.dumps({"webhookKey": "team", "payload": {"text": "ok"}})
+    event = {"body": base64.b64encode(body.encode("utf-8")).decode("utf-8"), "isBase64Encoded": True}
 
     resp = handler.lambda_handler(event, None)
 
     assert resp["statusCode"] == 200
-    assert patch_sqs.calls[0]["MessageBody"] == json.dumps({"text": "ok"})
+    assert patch_sqs.calls[0]["MessageBody"] == body

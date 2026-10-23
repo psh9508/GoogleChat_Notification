@@ -7,7 +7,6 @@ import boto3
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from botocore.exceptions import ClientError
 
 # --- Configuration and Initialization ---
 LOGGER = logging.getLogger(__name__)
@@ -85,42 +84,31 @@ def process_record_idempotent(record):
     message_id = record.get("messageId")
     body_str = record.get("body")
     LOGGER.info("Processing message_id=%s body_preview=%s", message_id, str(body_str)[:300])
-    
-    try:
-        table.put_item(
-            Item={
-                'PK': message_id,
-                'status': 'IN_PROGRESS',
-                'created_at': int(time.time()),
-                'ttl': int(time.time()) + 120
-            },
-            ConditionExpression='attribute_not_exists(PK)'
-        )
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            LOGGER.info(f"Duplicate Message detected: {message_id}. Skipping.")
-            return
-        else:
-            # Raise DB connection errors etc., to trigger SQS retry
-            raise e
+
+    # DB errors are raised to trigger SQS retry
+    existing = table.get_item(Key={'PK': message_id}, ConsistentRead=True).get('Item')
+    if existing:
+        LOGGER.info(f"Duplicate Message detected: {message_id}. Skipping.")
+        return
 
     try:
         LOGGER.info(f"Processing message: {message_id}")
         body = json.loads(body_str)
-        
+
         webhook_map = get_all_webhooks()
         target_url = _resolve_webhook(body["webhookKey"], webhook_map)
-        
+
         _send_to_google_chat(target_url, body["payload"])
         LOGGER.info("Message sent to webhookKey: %s", body["webhookKey"])
 
-        table.update_item(
-            Key={'PK': message_id},
-            UpdateExpression="set #st = :st_val, #ttl = :ttl_val",
-            ExpressionAttributeNames={'#st': 'status', '#ttl': 'ttl'},
-            ExpressionAttributeValues={
-                ':st_val': 'COMPLETED',
-                ':ttl_val': int(time.time()) + 86400,  # expire after 24h
+        # Record only after sending: a crash before this point retries the message instead of losing it
+        now = int(time.time())
+        table.put_item(
+            Item={
+                'PK': message_id,
+                'status': 'COMPLETED',
+                'completed_at': now,
+                'ttl': now + 86400,  # expire after 24h
             }
         )
         LOGGER.info(f"Successfully completed: {message_id}")
@@ -133,11 +121,6 @@ def process_record_idempotent(record):
             str(body_str)[:500],
             exc_info=True,
         )
-        try:
-            table.delete_item(Key={'PK': message_id})
-        except Exception as delete_exc:
-            LOGGER.error(f"Failed to rollback lock for {message_id}: {delete_exc}")
-        
         raise exc
 
 def lambda_handler(event, context):
@@ -149,7 +132,6 @@ def lambda_handler(event, context):
             process_record_idempotent(record)
             
         except Exception as exc:
-            # Error is raised after Rollback inside process_record_idempotent
             # Notify SQS: "This message failed, please provide it again later"
             LOGGER.error(
                 "Message %s failed permanently in this run. error=%s body_preview=%s",
