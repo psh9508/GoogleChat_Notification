@@ -43,9 +43,11 @@ Resources:
     Properties:
       StageName: Prod
       DefinitionBody:
-        swagger: "2.0"
+        # OpenAPI 3.0 so payload can use anyOf; Swagger 2.0 drops multi-type properties on import
+        openapi: "3.0.1"
         info:
           title: !Ref AWS::StackName
+          version: "1.0"
         x-amazon-apigateway-request-validators:
           body:
             validateRequestBody: true
@@ -55,34 +57,32 @@ Resources:
             statusCode: 400
             responseTemplates:
               application/json: '{"message": "$context.error.validationErrorString"}'
-        definitions:
-          NotifyRequest:
-            type: object
-            required:
-              - webhookKey
-              - payload
-            properties:
-              webhookKey:
-                type: string
-                minLength: 1
-              payload:
-                type:
-                  - object
-                  - array
-                  - string
+        components:
+          schemas:
+            NotifyRequest:
+              type: object
+              required:
+                - webhookKey
+                - payload
+              properties:
+                webhookKey:
+                  type: string
+                  minLength: 1
+                payload:
+                  anyOf:
+                    - type: object
+                    - type: array
+                      items: {}
+                    - type: string
         paths:
           /googlechat/notify:
             post:
-              consumes:
-                - application/json
-              produces:
-                - application/json
-              parameters:
-                - in: body
-                  name: NotifyRequest
-                  required: true
-                  schema:
-                    $ref: "#/definitions/NotifyRequest"
+              requestBody:
+                required: true
+                content:
+                  application/json:
+                    schema:
+                      $ref: "#/components/schemas/NotifyRequest"
               x-amazon-apigateway-request-validator: body
               responses:
                 "200":

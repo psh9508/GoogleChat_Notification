@@ -8,12 +8,11 @@
 
 ![Structure](./docs/structure_image.png)
 
-1. `API Gateway`
-    Receives external requests, validates that they are messages we can process (JSON Schema request validation), and sends them directly to `SQS` without a `Lambda` in between. Invalid requests are rejected with a 400 error.
-2. `SQS` buffers the messages so they can be processed reliably, and moves messages that keep failing to the DLQ.
-3. When a message arrives in `SQS`, the Notification `Lambda` is triggered.
-4. Because Google Chat Webhooks use URLs that include authentication keys, anyone with the URL can send messages to Google Chat. For security reasons, we do not pass the URL directly as a parameter. Instead, we pass a key that can resolve the URL, and `Secrets Manager` resolves the actual Webhook URL.
-5. Due to `SQS`'s "at-least-once delivery" model, notifications may be sent more than once. To ensure idempotency, we use `DynamoDB`.
+1. `API Gateway` → `SQS`
+    Receives external requests, validates that they are messages we can process using JSON Schema, and forwards them to `SQS`. Requests that fail validation never reach `SQS` and are rejected with a 400 error.
+2. When a message arrives in `SQS`, the Notification `Lambda` is triggered. Messages that fail processing return to `SQS` and are retried, and messages that fail 3 or more times are moved to the DLQ.
+3. Because Google Chat Webhooks use URLs that include authentication keys, anyone with the URL can send messages to Google Chat. For security reasons, we do not pass the URL directly as a parameter. Instead, we pass a key that can resolve the URL, and `Secrets Manager` resolves the actual Webhook URL.
+4. Due to `SQS`'s "at-least-once delivery" model, notifications may be sent more than once. To ensure idempotency, we use `DynamoDB`.
 
 ## Getting started
 
@@ -111,7 +110,7 @@ Example
 
 ## How to implement idempotency with DynamoDB?
 
-`SQS` operates on an "at-least-once delivery" model. This means that if a message is not properly processed, it can be delivered more than once at any time. To prevent this, we use `DynamoDB` to store the completion status of each message and skip messages that have already been processed.
+`SQS` operates on an "at-least-once delivery" model. This means that if a message is not properly processed, it can be delivered more than once at any time. To prevent this, we store the completion status of processed messages in `DynamoDB`, and skip a message if the same message arrives again.
 
 ### Why DynamoDB?
 
@@ -120,7 +119,8 @@ Example
 
 ### Processing Logic
 
-1. Before sending a message, look up the message_id (`PK`) in the database. If a record already exists, the message has already been processed, so it is skipped.
-2. The record is saved to the database only after the message has been sent successfully. If processing fails, nothing is saved and the exception is raised so that `SQS` retries the message. (A crash before saving results in a retry instead of a lost message.)
-3. Data saved to the database upon completion uses TTL (24 hours) to prevent indefinite data accumulation.
-4. The `SQS` visibility timeout is set to 120 seconds, 6x the function timeout (AWS recommendation), so that a message is not redelivered while it is still being processed.
+1. Before sending a message, check whether the same message_id exists in the database. If it does, the message has already been processed, so it is skipped without sending.
+2. Once sending is complete, save the `COMPLETED` status to the database. If processing fails before sending, nothing is left in the database, so the message is processed again when `SQS` retries it.
+3. Data saved to the database uses TTL (24 hours) to prevent indefinite data accumulation.
+
+> Because no lock is held on messages being processed, a notification may be sent twice in rare cases: when `SQS` delivers the same message twice concurrently, or when a failure occurs right after sending but before saving to the database. For a notification system, we decided that a duplicate notification is better than a lost message, so we chose this approach.
