@@ -6,8 +6,8 @@
 ![Stucture](structure_image.png)
 
 1. `API Gateway`
-    외부 요청을 수신 후 `SQS`로 전달하기 위해 `Lambda`를 호출합니다.
-2. `Lambda`에서 들어온 메시지가 우리가 처리할 수 있는 메시지인지 확인 하고 확인 된 데이터를 `SQS`에 전달합니다.
+    외부 요청을 수신 후 우리가 처리할 수 있는 메시지인지 JSON Schema로 검증하고, `Lambda`를 거치지 않고 `SQS`에 바로 전달합니다. 검증에 실패한 요청은 400 에러를 리턴합니다.
+2. `SQS`는 메시지를 안정적으로 처리할 수 있도록 버퍼 역할을 하고, 계속 실패하는 메시지는 DLQ로 옮깁니다.
 3. `SQS`에 메시지가 들어오면 Notification `Lambda`가 trigger 됩니다.
 4. Google Chat Webhook의 특성상 인증키가 같이 표함 된 URL을 사용하기 때문에 URL만 알면 Google Chat으로 메시지를 보낼 수 있습니다. 그래서 보안을 위해 직접적으로 URL을 파라미터로 넘기지 않고 URL을 Resolve 할 수 있는 Key를 파라미터로 받아 `Secrets Manager`에서 실제 Webhook URL을 Resolve 합니다.
 5. '최소 1번 전송' 이라는 `SQS`의 특성으로 인해 여러번 알림이 발송 될 수 있어서 `DynamoDB`를 이용해서 멱등성을 보장합니다.
@@ -62,7 +62,7 @@ sam deploy
 
 ### Secrets Manager 설정
 
-이 API는 메시지를 보내기 위해서는 `webhookKey`와 `payload` 키로 이루어진 `json` 데이터를 보내야 합니다.  `webhookKey`와 `payload`키가 없는 `json`이 들어오면 Pulish `Lambda`에서 에러를 리턴합니다. 그래서 `webhookKey`를 가지고 실제 Googlechat webhook url을 해결하기 위해서 `Secrets Manager`에 Key와 URL 데이터를 입력해야합니다.
+이 API는 메시지를 보내기 위해서는 `webhookKey`와 `payload` 키로 이루어진 `json` 데이터를 보내야 합니다.  `webhookKey`와 `payload`키가 없는 `json`이 들어오면 `API Gateway`에서 400 에러를 리턴합니다. 그래서 `webhookKey`를 가지고 실제 Googlechat webhook url을 해결하기 위해서 `Secrets Manager`에 Key와 URL 데이터를 입력해야합니다.
 
 예시
 ![alt text](secrets_manager.png)

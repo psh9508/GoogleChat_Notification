@@ -36,34 +36,106 @@ Resources:
       Name: GoogleWebhookSecret
       Description: "Google Chat Webhook URL Secret"
   
-  # Publisher Lambda that enqueues Google Chat messages
-  PublisherFunction:
-    Type: AWS::Serverless::Function
+  # REST API that validates requests and enqueues them to SQS directly (no Lambda)
+  # Keeps the implicit API's logical ID and stage name so the existing endpoint URL is preserved
+  ServerlessRestApi:
+    Type: AWS::Serverless::Api
     Properties:
-      CodeUri: publish_function/
-      Handler: app.lambda_handler
-      Runtime: python3.11
-      Architectures:
-      - x86_64
-      Environment:
-        Variables:
-          QUEUE_URL: !Ref NotificationQueue
-      Policies: 
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt NotificationQueue.QueueName
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            Path: /googlechat/notify
-            Method: post
+      StageName: Prod
+      DefinitionBody:
+        swagger: "2.0"
+        info:
+          title: !Ref AWS::StackName
+        x-amazon-apigateway-request-validators:
+          body:
+            validateRequestBody: true
+            validateRequestParameters: false
+        x-amazon-apigateway-gateway-responses:
+          BAD_REQUEST_BODY:
+            statusCode: 400
+            responseTemplates:
+              application/json: '{"message": "$context.error.validationErrorString"}'
+        definitions:
+          NotifyRequest:
+            type: object
+            required:
+              - webhookKey
+              - payload
+            properties:
+              webhookKey:
+                type: string
+                minLength: 1
+              payload:
+                type:
+                  - object
+                  - array
+                  - string
+        paths:
+          /googlechat/notify:
+            post:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              parameters:
+                - in: body
+                  name: NotifyRequest
+                  required: true
+                  schema:
+                    $ref: "#/definitions/NotifyRequest"
+              x-amazon-apigateway-request-validator: body
+              responses:
+                "200":
+                  description: queued
+                "500":
+                  description: internal error
+              x-amazon-apigateway-integration:
+                type: aws
+                httpMethod: POST
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${NotificationQueue.QueueName}"
+                credentials: !GetAtt ApiGatewaySqsRole.Arn
+                passthroughBehavior: never
+                requestParameters:
+                  integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
+                requestTemplates:
+                  application/json: "Action=SendMessage&MessageBody=$util.urlEncode($input.body)"
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseTemplates:
+                      application/json: |
+                        {"message": "queued", "id": "$input.path('$.SendMessageResponse.SendMessageResult.MessageId')"}
+                  "4\\d{2}|5\\d{2}":
+                    statusCode: "500"
+                    responseTemplates:
+                      application/json: '{"message": "internal error"}'
+
+  # Role assumed by API Gateway to send messages to the queue
+  ApiGatewaySqsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SendToNotificationQueue
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt NotificationQueue.Arn
 
   NotificationFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: notification_function/
       Handler: app.lambda_handler
-      Runtime: python3.11
+      Runtime: python3.14
       Architectures:
       - x86_64
       Environment:

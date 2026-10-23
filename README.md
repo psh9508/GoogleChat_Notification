@@ -9,8 +9,8 @@
 ![Structure](./docs/structure_image.png)
 
 1. `API Gateway`
-    Receives external requests and invokes a `Lambda` function to forward them to `SQS`.
-2. The `Lambda` function checks whether the incoming message is one we can process, and sends the validated data to `SQS`.
+    Receives external requests, validates that they are messages we can process (JSON Schema request validation), and sends them directly to `SQS` without a `Lambda` in between. Invalid requests are rejected with a 400 error.
+2. `SQS` buffers the messages so they can be processed reliably, and moves messages that keep failing to the DLQ.
 3. When a message arrives in `SQS`, the Notification `Lambda` is triggered.
 4. Because Google Chat Webhooks use URLs that include authentication keys, anyone with the URL can send messages to Google Chat. For security reasons, we do not pass the URL directly as a parameter. Instead, we pass a key that can resolve the URL, and `Secrets Manager` resolves the actual Webhook URL.
 5. Due to `SQS`'s "at-least-once delivery" model, notifications may be sent more than once. To ensure idempotency, we use `DynamoDB`.
@@ -65,7 +65,7 @@ You need to verify the endpoint for sending messages. Once the resources are dep
 
 ### Secrets Manager Setup
 
-This API requires a `JSON` payload containing both `webhookKey` and `payload` keys to send messages. If a `JSON` request without the `webhookKey` and `payload` keys is received, the Publish `Lambda` will return an error. Therefore, you must store the Key and URL data in `Secrets Manager` so that the `webhookKey` can be resolved to the actual Google Chat Webhook URL.
+This API requires a `JSON` payload containing both `webhookKey` and `payload` keys to send messages. If a `JSON` request without the `webhookKey` and `payload` keys is received, `API Gateway` will return a 400 error. Therefore, you must store the Key and URL data in `Secrets Manager` so that the `webhookKey` can be resolved to the actual Google Chat Webhook URL.
 
 Example
 ![alt text](./docs/secrets_manager.png)
